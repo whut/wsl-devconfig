@@ -1,0 +1,106 @@
+#cloud-config
+
+# This script can be used to configure any WSL distribution. To do so:
+#
+# 1. Put this file in %USERPROFILE%\.cloud-init folder.
+#
+# 2. Rename this file to DISTRIBUTION.user-data, where DISTRIBUTION is name you
+#    used when run `wsl --install Ubuntu --name DISTRIBUTION`.
+#
+# 3. Create DISTRIBUTION.sh (for commands to run as root) and (optionally)
+#    DISTRIBUTION-user.sh files (for commands to run as the WSL default user)
+#    with any code you would like to run on first login.
+#
+# 4. Finally rename occurrences of DISTRIBUTION_NAME in this file with the
+#    actual name of the distribution.
+
+# Background & Development Notes:
+#
+# The only way to automatically configure Linux distribution in WSL is via
+# cloud-init. Cloud-init is meant to be used to quick initial VM configuration,
+# before first login. This means that the output from cloud-init is not visible
+# to the user, which makes sense for cloud-init, but is not ideal in case of
+# time-consuming configuration of Linux distribution for development (e.g.
+# installing development tools) via WSL where the users sits before the screen.
+# To overcome that below cloud-config does lots of magic to finally run the
+# configuration script during first login of actual user (end result is like
+# [Vagrant](https://developer.hashicorp.com/vagrant) shell provisioner).
+#
+# Details:
+# 1. First (in write_files) the wsl-setup-wsl-devconfig-wrapper script is
+#    created in /usr/lib/wsl/ folder.
+# 2. Then (in runcmd) the current Windows user is detected, and then it is used
+#    to copy the configuration script from Windows to Linux. This way the
+#    configuration script does not have to be written inline here.
+# 3. Then /etc/wsl-distribution.conf is modified. Instead of running
+#    /usr/lib/wsl/wsl-setup script during first boot (that ask Windows user for
+#    the name of the default Linux user and then creates that user), newly
+#    created /usr/lib/wsl/wsl-setup-wsl-devconfig-wrapper script is run.
+# 4. Then (during first boot) wsl-setup-wsl-devconfig-wrapper script first calls
+#    the original wsl-setup script, and then reads the username of created user
+#    from /etc/wsl.conf.
+# 5. Then wsl-setup-wsl-devconfig-wrapper use this username to append to this
+#    user .bashrc a script that will run once the configuration script.
+# 6. Finally (during first interactive login of the user) the configuration
+#    script is run, and then a marker file is created to not run it again.
+#
+# TODO: find a way to not hardcode distribution name in so many places. Already
+# tried WSL_DISTRO_NAME (not set when cloud-init runs) and jinja templates
+# (could only be used to keep it as variable at the top of the file, but then
+# YAML syntax highlighting breaks, so bad developer experience).
+#
+# During development to test it you can run it from already booted WSL
+# distribution with:
+#
+#   sudo cloud-init clean --logs && sudo cloud-init --all-stages
+#
+# But this does not behave exactly as on first boot. For that exit the WSL
+# distribution and run:
+#
+#   wsl --unregister DISTRIBUTION_NAME && wsl --install --from-file
+#   .\Downloads\ubuntu-26.04-wsl-amd64.wsl --name DISTRIBUTION_NAME
+#
+# Somehow this does not trigger cloud-init: sudo cloud-init clean --logs
+# --reboot.
+#
+# To see the output from commands run (there is also cloud-init.log):
+#
+#   cat /var/log/cloud-init-output.log
+write_files:
+- content: |
+    #!/bin/sh
+
+    # https://olivergondza.github.io/2019/10/01/bash-strict-mode.html, but for SH
+    set -eu
+    IFS=$(printf '\n\t')
+
+    /usr/lib/wsl/wsl-setup "$@"
+
+    DEFAULT_USER="$(cat /etc/wsl.conf | grep "default=" | cut -d= -f2)"
+
+    cat <<EOF >> "/home/$DEFAULT_USER/.bashrc"
+    
+    if [ ! -e "~/.bashrc.wsl-devconfig-wrapper-marker" ]; then
+        echo "Running DISTRIBUTION_NAME.sh..."
+        sudo /run/DISTRIBUTION_NAME.sh || exit 1
+        if [ -e /run/DISTRIBUTION_NAME-user.sh ]; then
+            echo "Running DISTRIBUTION_NAME-user.sh..."
+            /run/DISTRIBUTION_NAME-user.sh || exit 1
+            touch ~/.bashrc.wsl-devconfig-wrapper-marker || exit 1
+        fi
+    fi
+    EOF
+  path: /usr/lib/wsl/wsl-setup-wsl-devconfig-wrapper
+  permissions: '0755'
+
+runcmd:
+# Using 2>/dev/null to silence cmd.exe warning "UNC paths are not supported.  Defaulting to Windows directory.".
+# Using tr -d '\r' to remove Windows line ending that is returned by cmd.exe and it breaks wslpath.
+# Using full path to cmd.exe, because somehow otherwise it is not found.
+- WINDOWS_USERPROFILE=$(wslpath "$(/mnt/c/Windows/system32/cmd.exe /c "@echo %USERPROFILE%" 2>/dev/null | tr -d '\r')")
+# Using /run folder instead of /tmp because this is what cloud-init recommends: https://docs.cloud-init.io/en/latest/reference/yaml_examples/boot_cmds.html#run-commands-on-instance-initialization
+- cp "$WINDOWS_USERPROFILE/.cloud-init/DISTRIBUTION_NAME.sh" /run/
+# Using | to start a multi-line string, as otherwise YAML would treat & as YAML anchor
+- |
+  [ -e "$WINDOWS_USERPROFILE/.cloud-init/DISTRIBUTION_NAME-user.sh" ] && cp "$WINDOWS_USERPROFILE/.cloud-init/DISTRIBUTION_NAME-user.sh" /run/
+- sed -i 's/command = \/usr\/lib\/wsl\/wsl-setup/command = \/usr\/lib\/wsl\/wsl-setup-wsl-devconfig-wrapper/g' /etc/wsl-distribution.conf
