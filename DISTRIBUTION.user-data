@@ -62,6 +62,14 @@
 #   wsl --unregister DISTRIBUTION_NAME && wsl --install --from-file
 #   .\Downloads\ubuntu-26.04-wsl-amd64.wsl --name DISTRIBUTION_NAME
 #
+# NOTE: Download Ubuntu WSL image from
+# https://releases.ubuntu.com/resolute/ubuntu-26.04-wsl-amd64.wsl, as documented
+# on
+# https://ubuntu.com/wsl/docs/stable/howto/install-ubuntu-wsl2/#method-2-download-and-install-from-the-ubuntu-archive.
+# Alternatively, download daily image (so less updates during first `apt-get
+# upgrade`) from
+# https://cdimages.ubuntu.com/ubuntu-wsl/resolute/daily-live/current/resolute-wsl-amd64.wsl.
+#
 # Somehow this does not trigger cloud-init: sudo cloud-init clean --logs
 # --reboot.
 #
@@ -82,14 +90,17 @@ write_files:
 
     cat <<EOF >> "/home/$DEFAULT_USER/.bashrc"
     
-    if [ ! -e "~/.bashrc.wsl-devconfig-wrapper-marker" ]; then
+    # using $HOME instead of ~, as the latter is not expanded inside double-quotes!
+    if [ ! -e "$HOME"/.bashrc.wsl-devconfig-wrapper-marker ]; then
         echo "Running DISTRIBUTION_NAME.sh..."
+        pushd "$HOME" || exit 1
         sudo /run/DISTRIBUTION_NAME.sh || exit 1
         if [ -e /run/DISTRIBUTION_NAME-user.sh ]; then
             echo "Running DISTRIBUTION_NAME-user.sh..."
             /run/DISTRIBUTION_NAME-user.sh || exit 1
         fi
-        touch ~/.bashrc.wsl-devconfig-wrapper-marker || exit 1
+        popd || exit 1
+        touch "$HOME"/.bashrc.wsl-devconfig-wrapper-marker || exit 1
     fi
     EOF
   path: /usr/lib/wsl/wsl-setup-wsl-devconfig-wrapper
