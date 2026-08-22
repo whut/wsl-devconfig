@@ -13,7 +13,15 @@ IFS=$(printf '\n\t')
 # Could just use OpenJDK from Ubuntu, it is also OK, but we like Temurin:)
 echo Configuring Adoptium Temurin repository...
 wget -qO - https://packages.adoptium.net/artifactory/api/gpg/key/public | gpg --dearmor > /etc/apt/trusted.gpg.d/adoptium.gpg
-echo "deb https://packages.adoptium.net/artifactory/deb $(awk -F= '/^VERSION_CODENAME/{print$2}' /etc/os-release) main" > /etc/apt/sources.list.d/adoptium.list
+# Using modern syntax (*.sources instead of *.list), to avoid warning from
+# `apt-get update`. Used output from `apt modernize-sources`.
+cat <<EOF > /etc/apt/sources.list.d/adoptium.sources
+Types: deb
+URIs: https://packages.adoptium.net/artifactory/deb/
+Suites: $(awk -F= '/^VERSION_CODENAME/{print$2}' /etc/os-release)
+Components: main
+Signed-By: /etc/apt/trusted.gpg.d/adoptium.gpg
+EOF
 
 # appstream is used to provide data (especially app icons) for GUI "app stores"
 # Removing it deletes /etc/apt/apt.conf.d/50appstream, which disables downloading
@@ -59,6 +67,24 @@ cat <<EOF > /etc/sysctl.d/99-async-profiler.conf
 kernel/perf_event_paranoid = 1
 kernel/kptr_restrict = 0
 EOF
+
+# Uninstalling some of not so needed recommends of ubuntu-wsl package. Note that
+# below --yes would accept even removing reverse dependencies if found.
+#
+# No need for snapd by Canonical
+apt-get purge snapd --auto-remove --verbose-versions --yes
+# No need to integrate with paid Canonical Ubuntu Pro
+apt-get purge wsl-pro-service --auto-remove --verbose-versions --yes
+# No need to send telemetry to Canonical
+apt-get purge ubuntu-insights --auto-remove --verbose-versions --yes
+# No need to be managed by paid Canonical Landscape
+apt-get purge landscape-client --auto-remove --verbose-versions --yes
+# And remove leftover directories, reported during purge as not empty
+rm -rf /var/log/landscape || true
+rm -rf /var/lib/landscape || true
+# No need to show Canonical ad banner in motd, but as it is in base-files, we
+# need to uninstall whole motd.
+apt-get purge motd-news-config show-motd --auto-remove --verbose-versions --yes
 
 # Maven: https://maven.apache.org/install.html#binary-distribution
 echo Installing Apache Maven...
