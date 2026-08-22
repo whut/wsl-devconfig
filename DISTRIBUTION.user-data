@@ -123,3 +123,32 @@ runcmd:
 - |
   [ -e "$WINDOWS_USERPROFILE/.cloud-init/DISTRIBUTION_NAME-user.sh" ] && cp "$WINDOWS_USERPROFILE/.cloud-init/DISTRIBUTION_NAME-user.sh" /run/
 - sed -i 's/command = \/usr\/lib\/wsl\/wsl-setup/command = \/usr\/lib\/wsl\/wsl-setup-wsl-devconfig-wrapper/' /etc/wsl-distribution.conf
+- |
+  # Trick to fix issue fixed only in WSL 2.9.5, which is pre-release as of now.
+  # See references below.
+  #
+  # TODO: need to investigate, as there are some strange warnings during
+  # IntelliJ IDEA startup then, so beware.
+  #
+  # Not using $RANDOM as it is somehow not set when cloud-init runs! let
+  # "RANDOM_UID = ($RANDOM % 999) + 1001"; echo $RANDOM_UID
+  RANDOM_UID=$(shuf -i 1001-1999 -n 1)
+
+  # This must be done even before WSL init starts:
+  # https://github.com/microsoft/WSL/blob/780845097a33b8937d7f831870e8fc228b1feb19/src/linux/init/init.cpp#L633
+  # and https://wsl.dev/technical-documentation/init/.
+  sed -i 's/defaultUid = 1000/defaultUid = '"$RANDOM_UID"'/' /etc/wsl-distribution.conf
+
+  cat <<EOF >> /etc/adduser.conf
+  
+  # wsl-devconfig trick (combined with change of defaultUid in
+  # /etc/wsl-distribution.conf) to avoid WSL issue fixed only in WSL 2.9.5,
+  # which is pre-release as of now. 
+  #
+  # References:
+  # - issue with symptoms: https://github.com/microsoft/WSL/issues/13826
+  # - issue with root-cause: https://github.com/microsoft/WSL/issues/13985
+  # - PR with fix: https://github.com/microsoft/WSL/pull/40519
+  # - PR with obsolete fix: https://github.com/microsoft/WSL/pull/14479
+  FIRST_UID=$RANDOM_UID
+  EOF
