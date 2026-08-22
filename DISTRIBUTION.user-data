@@ -11,6 +11,8 @@
 #    DISTRIBUTION-user.sh files (for commands to run as the WSL default user)
 #    with any code you would like to run on first login.
 #
+#    Check examples in /examples subfolder.
+#
 # 4. Finally rename occurrences of DISTRIBUTION_NAME in this file with the
 #    actual name of the distribution.
 
@@ -86,8 +88,8 @@ write_files:
         if [ -e /run/DISTRIBUTION_NAME-user.sh ]; then
             echo "Running DISTRIBUTION_NAME-user.sh..."
             /run/DISTRIBUTION_NAME-user.sh || exit 1
-            touch ~/.bashrc.wsl-devconfig-wrapper-marker || exit 1
         fi
+        touch ~/.bashrc.wsl-devconfig-wrapper-marker || exit 1
     fi
     EOF
   path: /usr/lib/wsl/wsl-setup-wsl-devconfig-wrapper
