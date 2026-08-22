@@ -37,9 +37,28 @@ echo Installing Adoptium Temurin JDK 25...
 apt-get install temurin-25-jdk --verbose-versions --yes
 
 # JQ
-echo Installing JQ...
+echo Installing jq...
 # --no-install-recommends would drop nothing
 apt-get install jq --verbose-versions --yes
+
+# libnspr4 is apparently used by IntelliJ IDEA, so installing it to avoid
+# "~/.local/opt/idea/plugins/jcef-plugin/jcef/cef_server: error while loading
+# shared libraries: libnspr4.so: cannot open shared object file: No such file or
+# directory" when for example starting the welcome guide.
+echo "Installing libnspr4 (used by IntelliJ IDEA)..."
+apt-get install libnspr4 --verbose-versions
+
+# Enable async-profiler to work without root privileges
+echo "Enabling kernel profiling without root privileges (used by async-profiler in IntelliJ IDEA)..."
+cat <<EOF > /etc/sysctl.d/99-async-profiler.conf
+# IntelliJ IDEA prompted that async-profiler needs those to collect information
+# without root privileges. Details in
+# https://github.com/async-profiler/async-profiler/blob/master/docs/GettingStarted.md,
+# https://www.jetbrains.com/help/idea/custom-profiler-configurations.html#adjust-kernel
+# and finally in https://www.kernel.org/doc/Documentation/sysctl/kernel.txt.
+kernel/perf_event_paranoid = 1
+kernel/kptr_restrict = 0
+EOF
 
 # Maven: https://maven.apache.org/install.html#binary-distribution
 echo Installing Apache Maven...
