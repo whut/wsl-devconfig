@@ -42,7 +42,8 @@
 #    the original wsl-setup script, and then reads the username of created user
 #    from /etc/wsl.conf.
 # 5. Then wsl-setup-wsl-devconfig-wrapper use this username to append to this
-#    user .bashrc a script that will run once the configuration script.
+#    user .bashrc (executed automatically for login shell) a script that will
+#    run once the configuration script.
 # 6. Finally (during first interactive login of the user) the configuration
 #    script is run, and then a marker file is created to not run it again.
 #
@@ -80,7 +81,9 @@ write_files:
 - content: |
     #!/bin/sh
 
-    # https://olivergondza.github.io/2019/10/01/bash-strict-mode.html, but for SH
+    # https://olivergondza.github.io/2019/10/01/bash-strict-mode.html, but for
+    # POSIX shell. Using it, instead of BASH, to have less ways to shoot
+    # yourself in the foot.
     set -eu
     IFS=$(printf '\n\t')
 
@@ -88,21 +91,22 @@ write_files:
 
     DEFAULT_USER="$(cat /etc/wsl.conf | grep "default=" | cut -d= -f2)"
 
+    # TODO: somehow it does not work if appended to .profile instead of .bashrc
     cat <<EOF >> "/home/$DEFAULT_USER/.bashrc"
     
-    if [ ! -e /home/"$DEFAULT_USER"/.bashrc.wsl-devconfig-wrapper-marker ]; then
+    if [ ! -e "\$HOME"/.bashrc.wsl-devconfig-wrapper-marker ]; then
         echo "Running DISTRIBUTION_NAME.sh..."
         # Have to pushd to the home directory, as the initial WSL boot would
         # start shell in /mnt/c/User/USER.
-        pushd /home/"$DEFAULT_USER" > /dev/null || exit 1
+        pushd "\$HOME" > /dev/null || exit 1
         sudo /run/DISTRIBUTION_NAME.sh || exit 1
         if [ -e /run/DISTRIBUTION_NAME-user.sh ]; then
             echo "Running DISTRIBUTION_NAME-user.sh..."
             /run/DISTRIBUTION_NAME-user.sh || exit 1
         fi
-        # Popd back to the original directory in case someone like this silly default:)
+        # Popd back to the original directory in case someone like it:)
         popd > /dev/null || exit 1
-        touch /home/"$DEFAULT_USER"/.bashrc.wsl-devconfig-wrapper-marker || exit 1
+        touch "\$HOME"/.bashrc.wsl-devconfig-wrapper-marker || exit 1
     fi
     EOF
   path: /usr/lib/wsl/wsl-setup-wsl-devconfig-wrapper
@@ -118,4 +122,4 @@ runcmd:
 # Using | to start a multi-line string, as otherwise YAML would treat & as YAML anchor
 - |
   [ -e "$WINDOWS_USERPROFILE/.cloud-init/DISTRIBUTION_NAME-user.sh" ] && cp "$WINDOWS_USERPROFILE/.cloud-init/DISTRIBUTION_NAME-user.sh" /run/
-- sed -i 's/command = \/usr\/lib\/wsl\/wsl-setup/command = \/usr\/lib\/wsl\/wsl-setup-wsl-devconfig-wrapper/g' /etc/wsl-distribution.conf
+- sed -i 's/command = \/usr\/lib\/wsl\/wsl-setup/command = \/usr\/lib\/wsl\/wsl-setup-wsl-devconfig-wrapper/' /etc/wsl-distribution.conf
