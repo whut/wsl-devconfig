@@ -9,19 +9,31 @@
 set -eu
 IFS=$(printf '\n\t')
 
-# Java JDK 25 from Adoptium Temurin: https://adoptium.net/installation/linux#deb-installation-on-debian-or-ubuntu
-# Could just use OpenJDK from Ubuntu, it is also OK, but we like Temurin:)
-echo Configuring Adoptium Temurin repository...
-wget -qO - https://packages.adoptium.net/artifactory/api/gpg/key/public | gpg --dearmor > /etc/apt/trusted.gpg.d/adoptium.gpg
-# Using modern syntax (*.sources instead of *.list), to avoid warning from
-# `apt-get update`. Used output from `apt modernize-sources`.
-cat <<EOF > /etc/apt/sources.list.d/adoptium.sources
-Types: deb
-URIs: https://packages.adoptium.net/artifactory/deb/
-Suites: $(awk -F= '/^VERSION_CODENAME/{print$2}' /etc/os-release)
-Components: main
-Signed-By: /etc/apt/trusted.gpg.d/adoptium.gpg
-EOF
+# Just using OpenJDK instead of Adoptium Temurin, as the latter package miss
+# many dependencies, e.g. libnss3/libnspr4, used later for example by IntelliJ
+# IDEA (e.g. it prints following error when starting the welcome guide:
+# "~/.local/opt/idea/plugins/jcef-plugin/jcef/cef_server: error while loading
+## # shared libraries: libnspr4.so: cannot open shared object file: No such file or
+## # directory"). AFAIK Temurin is build from exact the same sources.
+#
+# Not installing recommends, as it pulls packages with lots of dependencies:
+# libxt-dev (needed only for JNA with X11) and libatk-wrapper-java-jni (used for
+# accessability in Swing).
+apt-get install openjdk-25-jdk --no-install-recommends --verbose-versions --yes
+
+## # Java JDK 25 from Adoptium Temurin: https://adoptium.net/installation/linux#deb-installation-on-debian-or-ubuntu
+## # Could just use OpenJDK from Ubuntu, it is also OK, but we like Temurin:)
+## echo Configuring Adoptium Temurin repository...
+## wget -qO - https://packages.adoptium.net/artifactory/api/gpg/key/public | gpg --dearmor > /etc/apt/trusted.gpg.d/adoptium.gpg
+## # Using modern syntax (*.sources instead of *.list), to avoid warning from
+## # `apt-get update`. Used output from `apt modernize-sources`.
+## cat <<EOF > /etc/apt/sources.list.d/adoptium.sources
+## Types: deb
+## URIs: https://packages.adoptium.net/artifactory/deb/
+## Suites: $(awk -F= '/^VERSION_CODENAME/{print$2}' /etc/os-release)
+## Components: main
+## Signed-By: /etc/apt/trusted.gpg.d/adoptium.gpg
+## EOF
 
 # appstream is used to provide data (especially app icons) for GUI "app stores"
 # Removing it deletes /etc/apt/apt.conf.d/50appstream, which disables downloading
@@ -48,13 +60,6 @@ apt-get install temurin-25-jdk --verbose-versions --yes
 echo Installing jq...
 # --no-install-recommends would drop nothing
 apt-get install jq --verbose-versions --yes
-
-# libnspr4 is apparently used by IntelliJ IDEA, so installing it to avoid
-# "~/.local/opt/idea/plugins/jcef-plugin/jcef/cef_server: error while loading
-# shared libraries: libnspr4.so: cannot open shared object file: No such file or
-# directory" when for example starting the welcome guide.
-echo "Installing libnspr4 (used by IntelliJ IDEA)..."
-apt-get install libnspr4 --verbose-versions
 
 # Enable async-profiler to work without root privileges
 echo "Enabling kernel profiling without root privileges (used by async-profiler in IntelliJ IDEA)..."
