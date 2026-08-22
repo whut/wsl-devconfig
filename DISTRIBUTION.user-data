@@ -90,17 +90,19 @@ write_files:
 
     cat <<EOF >> "/home/$DEFAULT_USER/.bashrc"
     
-    # using $HOME instead of ~, as the latter is not expanded inside double-quotes!
-    if [ ! -e "$HOME"/.bashrc.wsl-devconfig-wrapper-marker ]; then
+    if [ ! -e /home/"$DEFAULT_USER"/.bashrc.wsl-devconfig-wrapper-marker ]; then
         echo "Running DISTRIBUTION_NAME.sh..."
-        pushd "$HOME" || exit 1
+        # Have to pushd to the home directory, as the initial WSL boot would
+        # start shell in /mnt/c/User/USER.
+        pushd /home/"$DEFAULT_USER" > /dev/null || exit 1
         sudo /run/DISTRIBUTION_NAME.sh || exit 1
         if [ -e /run/DISTRIBUTION_NAME-user.sh ]; then
             echo "Running DISTRIBUTION_NAME-user.sh..."
             /run/DISTRIBUTION_NAME-user.sh || exit 1
         fi
-        popd || exit 1
-        touch "$HOME"/.bashrc.wsl-devconfig-wrapper-marker || exit 1
+        # Popd back to the original directory in case someone like this silly default:)
+        popd > /dev/null || exit 1
+        touch /home/"$DEFAULT_USER"/.bashrc.wsl-devconfig-wrapper-marker || exit 1
     fi
     EOF
   path: /usr/lib/wsl/wsl-setup-wsl-devconfig-wrapper
