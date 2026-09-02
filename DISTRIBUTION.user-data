@@ -1,5 +1,10 @@
 #cloud-config
 
+# TODO: instead of cloud-init consider writing Windows-side wrapper for wsl,
+# like wsl-provision --install Ubuntu --name DISTRIBUTION ." that would recreate
+# WSL distribution, copy the scripts from local folder and just run them inside 
+# (no cloud-init hackery).
+
 # This script can be used to configure any WSL distribution. To do so:
 #
 # 1. Put this file in %USERPROFILE%\.cloud-init folder.
